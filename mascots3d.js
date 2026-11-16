@@ -153,10 +153,15 @@ function quanquan() {
     limb(g, [s * 0.22, 0.24, 0], [s * 0.22, 0.46, 0], 0.18, RED);
     part(S(0.21), SHOE, { parent: g, pos: [s * 0.24, 0.12, 0.08], scale: [1, 0.62, 1.3] });
   }
-  // 圓滾滾的身體：肚子鼓、往上收進頭底下
-  const bodyCurve = new THREE.SplineCurve([[0, 0.42], [0.42, 0.44], [0.6, 0.56], [0.68, 0.8], [0.65, 1.04], [0.54, 1.26], [0.36, 1.42], [0, 1.48]].map(([x, y]) => V2(x, y)));
-  const bodyPts = bodyCurve.getPoints(48);
+  // 身體：下擺外張 → 腰身收窄 → 胸口圓圓 → 往上收進頭底下
+  const bodyCurve = new THREE.SplineCurve([
+    [0, 0.42], [0.62, 0.42], [0.72, 0.46], [0.62, 0.6], [0.5, 0.76], [0.43, 0.9],
+    [0.46, 1.04], [0.47, 1.18], [0.36, 1.36], [0, 1.46],
+  ].map(([x, y]) => V2(x, y)));
+  const bodyPts = bodyCurve.getPoints(64);
   part(new THREE.LatheGeometry(bodyPts, 64), RED, { parent: g });
+  // 下擺滾邊
+  part(new THREE.TorusGeometry(0.7, 0.045, 12, 72), '#b54325', { parent: g, pos: [0, 0.46, 0], rot: [Math.PI / 2, 0, 0] });
   const bodyR = (y) => {
     for (let i = 0; i < bodyPts.length - 1; i++) {
       const a = bodyPts[i], b = bodyPts[i + 1];
@@ -164,8 +169,8 @@ function quanquan() {
     }
     return 0.6;
   };
-  // 腰帶（貼著肚子最鼓的地方）
-  const BY = 0.86, br = bodyR(BY);
+  // 腰帶（繫在腰身最細的地方）
+  const BY = 0.9, br = bodyR(BY);
   part(cyl(br + 0.02, br + 0.025, 0.17), WHITE, { parent: g, pos: [0, BY, 0] });
   for (const k of [-2, -1, 1, 2]) {
     const a = k * 0.28;
@@ -177,20 +182,20 @@ function quanquan() {
   // 白色交領（順著胸口的弧度）
   for (const s of [-1, 1]) {
     const c = part(box(0.08, 0.3, 0.04), WHITE, { parent: g });
-    c.position.set(s * 0.09, 1.12, bodyR(1.12) - 0.01);
-    c.rotation.set(-0.55, 0, s * 0.5);
+    c.position.set(s * 0.09, 1.14, bodyR(1.14) - 0.01);
+    c.rotation.set(-0.3, 0, s * 0.5);
   }
-  // 手：一手揮手、一手自然垂下（從圓肚子側邊長出來）
-  limb(g, [-0.52, 1.14, 0], [-0.84, 1.56, 0.1], 0.13, RED);
-  part(S(0.15), FACE, { parent: g, pos: [-0.9, 1.68, 0.12] });
-  limb(g, [0.52, 1.1, 0], [0.76, 0.76, 0.1], 0.13, RED);
-  part(S(0.14), FACE, { parent: g, pos: [0.8, 0.68, 0.12] });
+  // 手：一手揮手、一手自然垂下（從肩膀長出來）
+  limb(g, [-0.44, 1.16, 0], [-0.8, 1.56, 0.1], 0.13, RED);
+  part(S(0.15), FACE, { parent: g, pos: [-0.86, 1.68, 0.12] });
+  limb(g, [0.44, 1.14, 0], [0.7, 0.8, 0.1], 0.13, RED);
+  part(S(0.14), FACE, { parent: g, pos: [0.74, 0.72, 0.12] });
 
-  // 頭：圓潤的紅色頭罩，下緣往內收圓，與身體自然接在一起
-  const hoodCurve = new THREE.SplineCurve([[0, 0.04], [0.34, 0.0], [0.56, 0.08], [0.67, 0.3], [0.67, 0.62], [0.54, 0.9], [0.3, 1.04], [0, 1.08]].map(([x, y]) => V2(x, y)));
-  part(new THREE.LatheGeometry(hoodCurve.getPoints(48), 64), HOOD, { parent: g, pos: [0, 1.3, 0] });
+  // 頭：紅色頭罩，下緣往內收圓接身體，上半部保持寬（頭頂寬寬的戴屋頂）
+  const hoodCurve = new THREE.SplineCurve([[0, 0.04], [0.34, 0.0], [0.56, 0.08], [0.68, 0.3], [0.73, 0.6], [0.74, 0.86], [0.62, 1.02], [0, 1.08]].map(([x, y]) => V2(x, y)));
+  part(new THREE.LatheGeometry(hoodCurve.getPoints(48), 64), HOOD, { parent: g, pos: [0, 1.3, 0], scale: [1, 1, 0.8] });
   // 臉：正圓、整個露在頭罩前方（不被頭罩切成面具形），厚度壓扁避免像口鼻
-  const fc = [0, 1.79, 0.5], fr = [0.5, 0.5, 0.3];
+  const fc = [0, 1.78, 0.62], fr = [0.5, 0.5, 0.3];
   part(S(1), FACE, { parent: g, pos: fc, scale: fr });
   face(g, ellipsoidSurf(fc, fr), { eyes: 'open', size: 0.88, spread: 0.4, eyeY: 0.06, mouthY: -0.3, blushOut: 0.2, blushY: -0.16 });
 
