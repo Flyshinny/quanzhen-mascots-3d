@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>吉祥物 3D 人物</title>
+<meta name="description" content="全真道院五位吉祥物的 3D 人物模型，可旋轉、切換正面／側面／上方視角。">
+<link rel="icon" href="assets/ruirui.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  body { background: radial-gradient(ellipse at 60% 55%, #fffaf2 0%, #fdf3e7 55%, #f6e3cc 100%); }
+  .views {
+    position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
+    display: grid; gap: 8px;
+  }
+  .views button, .tool {
+    border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    font: inherit; font-weight: 700; font-size: 14px; padding: 9px 16px; border-radius: 999px; cursor: pointer;
+  }
+  .views button.on { background: var(--accent); color: #fff; border-color: transparent; }
+  .views button:focus-visible, .tool:focus-visible { outline: 2px solid var(--brick); outline-offset: 2px; }
+  .toolbar { position: fixed; top: 18px; left: 18px; display: flex; gap: 8px; }
+  .tool { text-decoration: none; display: inline-block; }
+  @media (max-width: 900px) {
+    .views { top: auto; bottom: 150px; right: 12px; transform: none; gap: 6px; }
+    .views button { padding: 7px 12px; font-size: 13px; }
+    .toolbar { top: auto; bottom: 150px; left: 12px; flex-direction: column; }
+    .card { bottom: 82px; }
+    .card .desc { display: none; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+  <canvas id="scene" aria-label="吉祥物 3D 模型"></canvas>
+
+  <header class="top">
+    <p class="kicker">3D 人物</p>
+    <h1>全真道院吉祥物</h1>
+    <p class="sub">拖曳旋轉・滾輪縮放・右側切換視角</p>
+  </header>
+
+  <div class="toolbar">
+    <a class="tool" href="./">← 轉盤舞台</a>
+    <button class="tool" id="dl">下載 PNG</button>
+  </div>
+
+  <section class="card" id="card" aria-live="polite">
+    <span class="badge" id="badge"></span>
+    <h2 id="name"></h2>
+    <p class="desc" id="desc"></p>
+    <p class="quote" id="quote"></p>
+  </section>
+
+  <div class="views" id="views" aria-label="視角">
+    <button data-v="hero" class="on">立體</button>
+    <button data-v="front">正面</button>
+    <button data-v="side">側面</button>
+    <button data-v="top">上方</button>
+    <button data-v="all">五位合照</button>
+  </div>
+
+  <nav class="dock" aria-label="選擇吉祥物">
+    <button class="arrow" id="prev" aria-label="上一位">‹</button>
+    <div class="thumbs" id="thumbs"></div>
+    <button class="arrow" id="next" aria-label="下一位">›</button>
+  </nav>
+  <div class="loader" id="loader">載入中…</div>
+
+  <script type="module" src="characters.js"></script>
+</body>
+</html>
