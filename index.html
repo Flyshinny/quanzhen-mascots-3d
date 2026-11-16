@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>全真道院吉祥物</title>
+<meta name="description" content="全真道院五位吉祥物 3D 角色介紹：全全、真真、忠忠、瑞瑞、恕恕。">
+<link rel="icon" href="assets/ruirui.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+  <canvas id="scene" aria-label="五位吉祥物的 3D 舞台"></canvas>
+
+  <header class="top">
+    <p class="kicker">一貫道基礎忠恕瑞周</p>
+    <h1>全真道院吉祥物</h1>
+    <p class="sub">取名自「忠恕瑞周全真」・配色取自道院紅磚、琉璃瓦、綠欄杆</p>
+  </header>
+
+  <section class="card" id="card" aria-live="polite">
+    <span class="badge" id="badge"></span>
+    <h2 id="name"></h2>
+    <p class="desc" id="desc"></p>
+    <p class="quote" id="quote"></p>
+    <ul class="traits" id="traits"></ul>
+  </section>
+
+  <nav class="dock" id="dock" aria-label="選擇吉祥物">
+    <button class="arrow" id="prev" aria-label="上一位">‹</button>
+    <div class="thumbs" id="thumbs"></div>
+    <button class="arrow" id="next" aria-label="下一位">›</button>
+  </nav>
+
+  <p class="hint">點選角色・拖曳旋轉・← → 切換</p>
+  <div class="loader" id="loader">載入中…</div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

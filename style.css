@@ -1,0 +1,99 @@
+:root {
+  --bg: #fdf3e7;
+  --ink: #4a2f22;
+  --muted: #8a6a58;
+  --card: rgba(255, 252, 247, 0.86);
+  --line: rgba(74, 47, 34, 0.12);
+  --brick: #b5452c;
+  --accent: #b5452c;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Noto Sans TC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+.top {
+  position: fixed; top: 0; left: 0; right: 0;
+  text-align: center; padding: 22px 16px 0; pointer-events: none;
+}
+.kicker { margin: 0; color: #2f7a66; letter-spacing: .35em; font-weight: 700; font-size: 14px; }
+.top h1 {
+  margin: 6px 0 4px; font-size: clamp(30px, 5vw, 54px); font-weight: 900;
+  color: var(--brick); letter-spacing: .12em;
+}
+.sub { margin: 0; color: var(--muted); font-size: 14px; }
+
+.card {
+  position: fixed; left: 32px; top: 50%; transform: translateY(-40%);
+  width: 330px; padding: 26px 26px 22px;
+  background: var(--card); backdrop-filter: blur(10px);
+  border: 1px solid var(--line); border-radius: 22px;
+  box-shadow: 0 18px 50px -20px rgba(74, 47, 34, .35);
+  transition: opacity .35s, transform .35s;
+}
+.card.swap { opacity: 0; transform: translateY(-40%) translateX(-14px); }
+.badge {
+  display: inline-block; padding: 5px 14px; border-radius: 999px;
+  color: #fff; font-weight: 700; font-size: 14px; background: var(--accent);
+}
+.card h2 { margin: 12px 0 6px; font-size: 52px; font-weight: 900; letter-spacing: .1em; line-height: 1.1; }
+.desc { margin: 0 0 12px; line-height: 1.75; color: #5d4234; }
+.quote { margin: 0 0 14px; font-weight: 700; color: var(--accent); font-size: 17px; }
+.traits { list-style: none; margin: 0; padding: 12px 0 0; border-top: 1px dashed var(--line); display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+.traits b { color: var(--ink); font-weight: 500; margin-right: 6px; }
+
+.dock {
+  position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  background: var(--card); backdrop-filter: blur(10px);
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px;
+  box-shadow: 0 10px 30px -16px rgba(74, 47, 34, .4);
+  max-width: calc(100vw - 32px);
+}
+.thumbs { display: flex; gap: 4px; }
+.thumb {
+  border: 0; background: transparent; cursor: pointer; border-radius: 999px;
+  display: flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px;
+  font: inherit; font-weight: 700; color: var(--muted); white-space: nowrap; transition: background .2s, color .2s;
+}
+.thumb img { width: 36px; height: 36px; object-fit: contain; }
+.thumb.on { background: var(--c); color: #fff; }
+.thumb:focus-visible, .arrow:focus-visible { outline: 2px solid var(--brick); outline-offset: 2px; }
+.arrow {
+  width: 40px; height: 40px; border-radius: 50%; border: 0; cursor: pointer;
+  background: #fff; color: var(--ink); font-size: 24px; line-height: 1; flex: none;
+}
+.arrow:hover { background: #f4e6d6; }
+.hint { position: fixed; right: 24px; bottom: 34px; margin: 0; color: var(--muted); font-size: 13px; }
+.loader {
+  position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg);
+  font-weight: 700; color: var(--brick); transition: opacity .6s;
+}
+.loader.done { opacity: 0; pointer-events: none; }
+
+@media (max-width: 900px) {
+  .top { padding-top: 14px; }
+  .sub { display: none; }
+  .card {
+    left: 16px; right: 16px; width: auto; top: auto; bottom: 88px; transform: none;
+    padding: 14px 18px; display: grid; grid-template-columns: auto 1fr; column-gap: 14px; align-items: center;
+  }
+  .card.swap { transform: translateY(10px); }
+  .card h2 { font-size: 34px; margin: 0; grid-row: 1 / 3; grid-column: 1; }
+  .badge { grid-column: 2; justify-self: start; font-size: 12px; }
+  .quote { grid-column: 2; margin: 4px 0 0; font-size: 15px; }
+  .desc { grid-column: 1 / -1; margin: 8px 0 0; font-size: 14px; line-height: 1.6; }
+  .traits { display: none; }
+  .dock { bottom: 14px; gap: 4px; }
+  .thumb { padding: 3px; }
+  .thumb span { display: none; }
+  .thumb img { width: 34px; height: 34px; }
+  .arrow { width: 34px; height: 34px; }
+  .hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .card { transition: none; } }
