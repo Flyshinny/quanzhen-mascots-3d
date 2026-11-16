@@ -175,9 +175,10 @@ function quanquan() {
   // 頭：圓潤的紅色頭罩（鐘形，下緣略寬、無兩側鼓包），大圓臉在正面
   const hoodCurve = new THREE.SplineCurve([[0, 0], [0.52, 0], [0.64, 0.1], [0.68, 0.34], [0.64, 0.66], [0.5, 0.92], [0.26, 1.05], [0, 1.08]].map(([x, y]) => V2(x, y)));
   part(new THREE.LatheGeometry(hoodCurve.getPoints(48), 64), HOOD, { parent: g, pos: [0, 1.34, 0] });
-  const fc = [0, 1.8, 0.32], fr = [0.54, 0.48, 0.42];
+  // 臉：正圓、整個露在頭罩前方（不被頭罩切成面具形），厚度壓扁避免像口鼻
+  const fc = [0, 1.8, 0.5], fr = [0.5, 0.5, 0.3];
   part(S(1), FACE, { parent: g, pos: fc, scale: fr });
-  face(g, ellipsoidSurf(fc, fr), { eyes: 'open', spread: 0.38, eyeY: 0.12, mouthY: -0.22, blushOut: 0.18, blushY: -0.15 });
+  face(g, ellipsoidSurf(fc, fr), { eyes: 'open', size: 0.88, spread: 0.4, eyeY: 0.06, mouthY: -0.3, blushOut: 0.2, blushY: -0.16 });
 
   // 琉璃屋頂
   const roofPts = [[0, 0], [1.12, 0], [1.14, 0.05], [0.85, 0.17], [0.55, 0.33], [0.4, 0.46], [0, 0.48]];
