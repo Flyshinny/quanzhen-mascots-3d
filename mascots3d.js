@@ -148,35 +148,49 @@ function quanquan() {
   const RED = '#cf532e', HOOD = '#bd4a2b', ROOF = '#e27b3d', GOLD = '#f3b634', FACE = '#fde8d2',
     WHITE = '#fbf4e8', TEAL = '#2b9186', SHOE = '#7b4a2f';
 
+  // 短短圓圓的腿
   for (const s of [-1, 1]) {
-    limb(g, [s * 0.21, 0.22, 0], [s * 0.22, 0.52, 0], 0.16, RED);
-    part(S(0.2), SHOE, { parent: g, pos: [s * 0.23, 0.12, 0.08], scale: [1, 0.6, 1.35] });
+    limb(g, [s * 0.22, 0.24, 0], [s * 0.22, 0.46, 0], 0.18, RED);
+    part(S(0.21), SHOE, { parent: g, pos: [s * 0.24, 0.12, 0.08], scale: [1, 0.62, 1.3] });
   }
-  part(cyl(0.46, 0.6, 0.85), RED, { parent: g, pos: [0, 0.95, 0] });
-  part(cyl(0.535, 0.555, 0.17), WHITE, { parent: g, pos: [0, 0.98, 0] });
+  // 圓滾滾的身體：肚子鼓、往上收進頭底下
+  const bodyCurve = new THREE.SplineCurve([[0, 0.42], [0.42, 0.44], [0.6, 0.56], [0.68, 0.8], [0.65, 1.04], [0.54, 1.26], [0.36, 1.42], [0, 1.48]].map(([x, y]) => V2(x, y)));
+  const bodyPts = bodyCurve.getPoints(48);
+  part(new THREE.LatheGeometry(bodyPts, 64), RED, { parent: g });
+  const bodyR = (y) => {
+    for (let i = 0; i < bodyPts.length - 1; i++) {
+      const a = bodyPts[i], b = bodyPts[i + 1];
+      if (y >= Math.min(a.y, b.y) && y <= Math.max(a.y, b.y)) return a.x + (b.x - a.x) * (y - a.y) / ((b.y - a.y) || 1);
+    }
+    return 0.6;
+  };
+  // 腰帶（貼著肚子最鼓的地方）
+  const BY = 0.86, br = bodyR(BY);
+  part(cyl(br + 0.02, br + 0.025, 0.17), WHITE, { parent: g, pos: [0, BY, 0] });
   for (const k of [-2, -1, 1, 2]) {
-    const a = k * 0.3;
+    const a = k * 0.28;
     const b = part(box(0.1, 0.1, 0.03), TEAL, { parent: g, outline: false });
-    b.position.set(Math.sin(a) * 0.553, 0.98, Math.cos(a) * 0.553);
+    b.position.set(Math.sin(a) * (br + 0.035), BY, Math.cos(a) * (br + 0.035));
     b.rotation.y = a;
   }
-  part(cyl(0.1, 0.1, 0.05), GOLD, { parent: g, pos: [0, 0.98, 0.565], rot: [Math.PI / 2, 0, 0] });
+  part(cyl(0.11, 0.11, 0.05), GOLD, { parent: g, pos: [0, BY, br + 0.045], rot: [Math.PI / 2, 0, 0] });
+  // 白色交領（順著胸口的弧度）
   for (const s of [-1, 1]) {
-    const c = part(box(0.08, 0.34, 0.04), WHITE, { parent: g });
-    c.position.set(s * 0.09, 1.23, 0.48);
-    c.rotation.set(-0.3, 0, s * 0.5);
+    const c = part(box(0.08, 0.3, 0.04), WHITE, { parent: g });
+    c.position.set(s * 0.09, 1.12, bodyR(1.12) - 0.01);
+    c.rotation.set(-0.55, 0, s * 0.5);
   }
-  // 手：一手揮手、一手自然垂下
-  limb(g, [-0.42, 1.25, 0], [-0.74, 1.66, 0.1], 0.12, RED);
-  part(S(0.14), FACE, { parent: g, pos: [-0.8, 1.78, 0.12] });
-  limb(g, [0.42, 1.25, 0], [0.62, 0.86, 0.08], 0.12, RED);
-  part(S(0.13), FACE, { parent: g, pos: [0.65, 0.78, 0.1] });
+  // 手：一手揮手、一手自然垂下（從圓肚子側邊長出來）
+  limb(g, [-0.52, 1.14, 0], [-0.84, 1.56, 0.1], 0.13, RED);
+  part(S(0.15), FACE, { parent: g, pos: [-0.9, 1.68, 0.12] });
+  limb(g, [0.52, 1.1, 0], [0.76, 0.76, 0.1], 0.13, RED);
+  part(S(0.14), FACE, { parent: g, pos: [0.8, 0.68, 0.12] });
 
-  // 頭：圓潤的紅色頭罩（鐘形，下緣略寬、無兩側鼓包），大圓臉在正面
-  const hoodCurve = new THREE.SplineCurve([[0, 0], [0.52, 0], [0.64, 0.1], [0.68, 0.34], [0.64, 0.66], [0.5, 0.92], [0.26, 1.05], [0, 1.08]].map(([x, y]) => V2(x, y)));
-  part(new THREE.LatheGeometry(hoodCurve.getPoints(48), 64), HOOD, { parent: g, pos: [0, 1.34, 0] });
+  // 頭：圓潤的紅色頭罩，下緣往內收圓，與身體自然接在一起
+  const hoodCurve = new THREE.SplineCurve([[0, 0.04], [0.34, 0.0], [0.56, 0.08], [0.67, 0.3], [0.67, 0.62], [0.54, 0.9], [0.3, 1.04], [0, 1.08]].map(([x, y]) => V2(x, y)));
+  part(new THREE.LatheGeometry(hoodCurve.getPoints(48), 64), HOOD, { parent: g, pos: [0, 1.3, 0] });
   // 臉：正圓、整個露在頭罩前方（不被頭罩切成面具形），厚度壓扁避免像口鼻
-  const fc = [0, 1.8, 0.5], fr = [0.5, 0.5, 0.3];
+  const fc = [0, 1.79, 0.5], fr = [0.5, 0.5, 0.3];
   part(S(1), FACE, { parent: g, pos: fc, scale: fr });
   face(g, ellipsoidSurf(fc, fr), { eyes: 'open', size: 0.88, spread: 0.4, eyeY: 0.06, mouthY: -0.3, blushOut: 0.2, blushY: -0.16 });
 
