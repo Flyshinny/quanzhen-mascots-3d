@@ -1,7 +1,6 @@
 // 五位吉祥物的 3D 模型（以基本幾何組成，卡通著色＋描邊）
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const V2 = (x, y) => new THREE.Vector2(x, y);
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -173,25 +172,12 @@ function quanquan() {
   limb(g, [0.42, 1.25, 0], [0.62, 0.86, 0.08], 0.12, RED);
   part(S(0.13), FACE, { parent: g, pos: [0.65, 0.78, 0.1] });
 
-  // 頭：紅磚小屋（圓角方塊），白色簷帶，正面是臉
-  part(new RoundedBoxGeometry(1.2, 1.0, 0.98, 6, 0.24), HOOD, { parent: g, pos: [0, 1.88, 0] });
-  part(new RoundedBoxGeometry(1.26, 0.13, 1.04, 4, 0.06), WHITE, { parent: g, pos: [0, 2.31, 0] });
-  const seam = flat('#9e3d22');
-  for (const s of [-1, 1]) {
-    for (const [y, z, w] of [[1.66, 0, 0.6], [1.86, 0.1, 0.5], [2.06, -0.05, 0.6]]) {
-      const b = new THREE.Mesh(box(0.01, 0.025, w), seam);
-      b.position.set(s * 0.603, y, z);
-      g.add(b);
-    }
-    for (const [y, z] of [[1.76, 0.2], [1.76, -0.2], [1.96, -0.12], [1.96, 0.3]]) {
-      const b = new THREE.Mesh(box(0.01, 0.2, 0.025), seam);
-      b.position.set(s * 0.603, y, z);
-      g.add(b);
-    }
-  }
-  part(new RoundedBoxGeometry(0.88, 0.7, 0.3, 6, 0.14), FACE, { parent: g, pos: [0, 1.84, 0.36] });
-  const panel = (yaw, pitch, off = 0.008) => ({ p: V3(yaw * 0.62, 1.84 + pitch * 0.6, 0.51 + off), n: Z.clone() });
-  face(g, panel, { eyes: 'open', spread: 0.36, eyeY: 0.14, mouthY: -0.2, blushOut: 0.2, blushY: -0.15 });
+  // 頭：圓潤的紅色頭罩（鐘形，下緣略寬、無兩側鼓包），大圓臉在正面
+  const hoodCurve = new THREE.SplineCurve([[0, 0], [0.52, 0], [0.64, 0.1], [0.68, 0.34], [0.64, 0.66], [0.5, 0.92], [0.26, 1.05], [0, 1.08]].map(([x, y]) => V2(x, y)));
+  part(new THREE.LatheGeometry(hoodCurve.getPoints(48), 64), HOOD, { parent: g, pos: [0, 1.34, 0] });
+  const fc = [0, 1.8, 0.32], fr = [0.54, 0.48, 0.42];
+  part(S(1), FACE, { parent: g, pos: fc, scale: fr });
+  face(g, ellipsoidSurf(fc, fr), { eyes: 'open', spread: 0.38, eyeY: 0.12, mouthY: -0.22, blushOut: 0.18, blushY: -0.15 });
 
   // 琉璃屋頂
   const roofPts = [[0, 0], [1.12, 0], [1.14, 0.05], [0.85, 0.17], [0.55, 0.33], [0.4, 0.46], [0, 0.48]];
