@@ -191,32 +191,46 @@ function quanquan() {
   limb(g, [0.44, 1.14, 0], [0.7, 0.8, 0.1], 0.13, RED);
   part(S(0.14), FACE, { parent: g, pos: [0.74, 0.72, 0.12] });
 
-  // 頭：紅色頭罩，下緣往內收圓接身體，上半部保持寬（頭頂寬寬的戴屋頂）
-  const hoodCurve = new THREE.SplineCurve([[0, 0.04], [0.34, 0.0], [0.56, 0.08], [0.68, 0.3], [0.73, 0.6], [0.74, 0.86], [0.62, 1.02], [0, 1.08]].map(([x, y]) => V2(x, y)));
-  part(new THREE.LatheGeometry(hoodCurve.getPoints(48), 64), HOOD, { parent: g, pos: [0, 1.3, 0], scale: [1, 1, 0.8] });
-  // 臉：正圓、整個露在頭罩前方（不被頭罩切成面具形），厚度壓扁避免像口鼻
-  const fc = [0, 1.78, 0.62], fr = [0.5, 0.5, 0.3];
+  // 頭罩：跟臉一樣是橫向橢圓，四周一圈均勻紅邊
+  const HC = 1.8;
+  part(S(1), HOOD, { parent: g, pos: [0, HC, 0], scale: [0.76, 0.62, 0.6] });
+  // 兩個圓圓的耳朵（頭罩同色，藏在兩側後面）
+  for (const s of [-1, 1]) part(S(0.17), HOOD, { parent: g, pos: [s * 0.74, HC - 0.06, -0.06] });
+  // 臉：橫向橢圓，整個露在頭罩前方
+  const fc = [0, HC - 0.02, 0.48], fr = [0.57, 0.45, 0.3];
   part(S(1), FACE, { parent: g, pos: fc, scale: fr });
   face(g, ellipsoidSurf(fc, fr), { eyes: 'open', size: 0.88, spread: 0.4, eyeY: 0.06, mouthY: -0.3, blushOut: 0.2, blushY: -0.16 });
 
-  // 琉璃屋頂
+  // 下擺開衩示意：前面中間一條短線
+  const slit = [];
+  for (let i = 0; i <= 10; i++) {
+    const y = 0.53 + i * 0.018;
+    slit.push(V3(0, y, bodyR(y) + 0.012));
+  }
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(slit), 20, 0.013, 6), flat(INK)));
+
+  // 琉璃屋頂（整頂縮到 80%，底部貼在頭頂）
+  const hat = new THREE.Group();
+  hat.scale.setScalar(0.8);
+  hat.position.y = (HC + 0.6) - 0.8 * 2.38;
+  g.add(hat);
   const roofPts = [[0, 0], [1.12, 0], [1.14, 0.05], [0.85, 0.17], [0.55, 0.33], [0.4, 0.46], [0, 0.48]];
-  part(lathe(roofPts), ROOF, { parent: g, pos: [0, 2.38, 0] });
+  part(lathe(roofPts), ROOF, { parent: hat, pos: [0, 2.38, 0] });
   const ridgeMat = flat('#b8532a');
   for (let k = 0; k < 20; k++) {
     const a = (k / 20) * Math.PI * 2;
     const pts = [[1.12, 0.06], [0.85, 0.185], [0.55, 0.345], [0.41, 0.47]]
       .map(([r, y]) => V3(Math.sin(a) * r * 1.012, 2.38 + y + 0.004, Math.cos(a) * r * 1.012));
     const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.011, 6), ridgeMat);
-    g.add(tube);
+    hat.add(tube);
   }
-  part(new THREE.TorusGeometry(1.13, 0.045, 10, 72), '#c85f2c', { parent: g, pos: [0, 2.41, 0], rot: [Math.PI / 2, 0, 0] });
-  part(cyl(0.42, 0.44, 0.1), '#d06a33', { parent: g, pos: [0, 2.89, 0] });
-  part(cyl(0.035, 0.035, 0.24), GOLD, { parent: g, pos: [0, 3.04, 0] });
-  part(S(0.13), GOLD, { parent: g, pos: [0, 3.2, 0] });
+  part(new THREE.TorusGeometry(1.13, 0.045, 10, 72), '#c85f2c', { parent: hat, pos: [0, 2.41, 0], rot: [Math.PI / 2, 0, 0] });
+  part(cyl(0.42, 0.44, 0.1), '#d06a33', { parent: hat, pos: [0, 2.89, 0] });
+  part(cyl(0.035, 0.035, 0.24), GOLD, { parent: hat, pos: [0, 3.04, 0] });
+  part(S(0.13), GOLD, { parent: hat, pos: [0, 3.2, 0] });
   for (const s of [-1, 1]) {
-    part(cyl(0.03, 0.03, 0.12), GOLD, { parent: g, pos: [s * 0.36, 2.98, 0] });
-    part(S(0.09), GOLD, { parent: g, pos: [s * 0.36, 3.07, 0] });
+    part(cyl(0.03, 0.03, 0.12), GOLD, { parent: hat, pos: [s * 0.36, 2.98, 0] });
+    part(S(0.09), GOLD, { parent: hat, pos: [s * 0.36, 3.07, 0] });
   }
   return g;
 }
