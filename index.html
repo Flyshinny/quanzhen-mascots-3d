@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=2">
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -40,10 +40,26 @@
     <button class="arrow" id="next" aria-label="下一位">›</button>
   </nav>
 
-  <a class="to3d" href="characters.html">3D 人物模型 →</a>
+  <div class="links">
+    <button class="to3d play" id="openVideo" type="button">▶ 自我介紹影片</button>
+    <a class="to3d" href="characters.html">3D 人物模型 →</a>
+  </div>
+
+  <dialog class="video" id="videoDlg" aria-label="吉祥物自我介紹影片">
+    <button class="close" id="closeVideo" type="button" aria-label="關閉影片">×</button>
+    <video id="introVideo" src="media/intro.mp4" poster="media/intro-poster.jpg" controls playsinline preload="none"></video>
+  </dialog>
   <p class="hint">點選角色・拖曳旋轉・← → 切換</p>
   <div class="loader" id="loader">載入中…</div>
 
   <script type="module" src="main.js"></script>
+  <script>
+    const dlg = document.getElementById('videoDlg'), vid = document.getElementById('introVideo');
+    document.getElementById('openVideo').onclick = () => { dlg.showModal(); vid.play().catch(() => {}); };
+    document.getElementById('closeVideo').onclick = () => dlg.close();
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    dlg.addEventListener('close', () => vid.pause());
+    dlg.addEventListener('keydown', (e) => e.stopPropagation());
+  </script>
 </body>
 </html>

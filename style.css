@@ -69,15 +69,29 @@ body {
   background: #fff; color: var(--ink); font-size: 24px; line-height: 1; flex: none;
 }
 .arrow:hover { background: #f4e6d6; }
+.links { position: fixed; top: 18px; right: 18px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; z-index: 5; }
 .to3d {
-  position: fixed; top: 18px; right: 18px; text-decoration: none;
+  text-decoration: none; font-family: inherit; cursor: pointer;
   background: var(--card); border: 1px solid var(--line); border-radius: 999px;
   padding: 9px 16px; color: var(--ink); font-weight: 700; font-size: 14px;
 }
 .to3d:hover { background: #fff; }
+.to3d.play { background: var(--brick); border-color: var(--brick); color: #fff; }
+.to3d.play:hover { background: #9c3a24; }
+.video {
+  width: min(960px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: 18px;
+  background: #2a1d17; overflow: visible; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .6);
+}
+.video::backdrop { background: rgba(42, 29, 23, .72); backdrop-filter: blur(4px); }
+.video video { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 18px; background: #2a1d17; }
+.video .close {
+  position: absolute; top: -14px; right: -14px; width: 36px; height: 36px; border-radius: 50%;
+  border: 0; background: #fff; color: var(--ink); font-size: 22px; line-height: 1; cursor: pointer;
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, .5);
+}
 .hint { position: fixed; right: 24px; bottom: 34px; margin: 0; color: var(--muted); font-size: 13px; }
 .loader {
-  position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg);
+  position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--bg);
   font-weight: 700; color: var(--brick); transition: opacity .6s;
 }
 .loader.done { opacity: 0; pointer-events: none; }
@@ -101,5 +115,8 @@ body {
   .thumb img { width: 34px; height: 34px; }
   .arrow { width: 34px; height: 34px; }
   .hint { display: none; }
+  .links { top: 92px; right: auto; left: 50%; transform: translateX(-50%); flex-direction: row; gap: 6px; white-space: nowrap; }
+  .to3d { padding: 7px 12px; font-size: 13px; }
+  .video .close { top: -44px; right: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
