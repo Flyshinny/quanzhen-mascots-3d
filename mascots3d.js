@@ -148,11 +148,26 @@ function quanquan() {
   const RED = '#cf532e', HOOD = '#bd4a2b', ROOF = '#e27b3d', GOLD = '#f3b634', FACE = '#fde8d2',
     WHITE = '#fbf4e8', TEAL = '#2b9186', SHOE = '#7b4a2f';
 
-  // 短短圓圓的腿
+  // 關節（可動）：腿、上半身、手、頭各自一個樞紐，預設姿勢與原本相同
+  const pivot = (parent, x, y, z = 0) => {
+    const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p);
+    const inner = new THREE.Group(); inner.position.set(-x, -y, -z); p.add(inner);
+    return [p, inner];
+  };
+  const rig = {};
+  // 短短圓圓的腿（樞紐在髖部）
   for (const s of [-1, 1]) {
-    limb(g, [s * 0.22, 0.24, 0], [s * 0.22, 0.46, 0], 0.18, RED);
-    part(S(0.21), SHOE, { parent: g, pos: [s * 0.24, 0.12, 0.08], scale: [1, 0.62, 1.3] });
+    const [leg, li] = pivot(g, s * 0.22, 0.46);
+    limb(li, [s * 0.22, 0.24, 0], [s * 0.22, 0.46, 0], 0.18, RED);
+    part(S(0.21), SHOE, { parent: li, pos: [s * 0.24, 0.12, 0.08], scale: [1, 0.62, 1.3] });
+    rig[s < 0 ? 'legL' : 'legR'] = leg;
   }
+  // 上半身（樞紐在下擺高度，可左右彎、轉身）
+  const [upper, ui] = pivot(g, 0, 0.46);
+  rig.upper = upper;
+  const root = g;
+  {
+  const g = ui;
   // 身體：下擺外張 → 腰身收窄 → 胸口圓圓 → 往上收進頭底下
   const bodyCurve = new THREE.SplineCurve([
     [0, 0.42], [0.62, 0.42], [0.72, 0.46], [0.62, 0.6], [0.5, 0.76], [0.43, 0.9],
@@ -185,12 +200,23 @@ function quanquan() {
     c.position.set(s * 0.09, 1.14, bodyR(1.14) - 0.01);
     c.rotation.set(-0.3, 0, s * 0.5);
   }
-  // 手：一手揮手、一手自然垂下（從肩膀長出來）
-  limb(g, [-0.44, 1.16, 0], [-0.8, 1.56, 0.1], 0.13, RED);
-  part(S(0.15), FACE, { parent: g, pos: [-0.86, 1.68, 0.12] });
-  limb(g, [0.44, 1.14, 0], [0.7, 0.8, 0.1], 0.13, RED);
-  part(S(0.14), FACE, { parent: g, pos: [0.74, 0.72, 0.12] });
+  // 手：樞紐在肩膀，手臂在樞紐裡朝正下方；預設一手揮手、一手自然垂下
+  for (const s of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.position.set(s * 0.44, 1.15, 0);
+    g.add(arm);
+    limb(arm, [0, 0, 0], [0, -0.48, 0.08], 0.13, RED);
+    part(S(0.145), FACE, { parent: arm, pos: [0, -0.6, 0.1] });
+    rig[s < 0 ? 'armL' : 'armR'] = arm;
+  }
+  rig.armL.rotation.z = -2.4;   // 揮手
+  rig.armR.rotation.z = 0.65;   // 垂下
 
+  // 頭（樞紐在脖子）
+  const [head, hi] = pivot(g, 0, 1.4);
+  rig.head = head;
+  {
+  const g = hi;
   // 頭罩：跟臉一樣是橫向橢圓，四周一圈均勻紅邊
   const HC = 1.8;
   part(S(1), HOOD, { parent: g, pos: [0, HC, 0], scale: [0.76, 0.62, 0.6] });
@@ -200,14 +226,6 @@ function quanquan() {
   const fc = [0, HC - 0.02, 0.48], fr = [0.57, 0.45, 0.3];
   part(S(1), FACE, { parent: g, pos: fc, scale: fr });
   face(g, ellipsoidSurf(fc, fr), { eyes: 'open', size: 0.88, spread: 0.4, eyeY: 0.06, mouthY: -0.3, blushOut: 0.2, blushY: -0.16 });
-
-  // 下擺開衩示意：前面中間一條短線
-  const slit = [];
-  for (let i = 0; i <= 10; i++) {
-    const y = 0.53 + i * 0.018;
-    slit.push(V3(0, y, bodyR(y) + 0.012));
-  }
-  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(slit), 20, 0.013, 6), flat(INK)));
 
   // 琉璃屋頂（整頂縮到 80%，底部貼在頭頂）
   const hat = new THREE.Group();
@@ -232,7 +250,18 @@ function quanquan() {
     part(cyl(0.03, 0.03, 0.12), GOLD, { parent: hat, pos: [s * 0.36, 2.98, 0] });
     part(S(0.09), GOLD, { parent: hat, pos: [s * 0.36, 3.07, 0] });
   }
-  return g;
+  } // 頭
+
+  // 下擺開衩示意：前面中間一條短線
+  const slit = [];
+  for (let i = 0; i <= 10; i++) {
+    const y = 0.53 + i * 0.018;
+    slit.push(V3(0, y, bodyR(y) + 0.012));
+  }
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(slit), 20, 0.013, 6), flat(INK)));
+  } // 上半身
+  root.userData.rig = rig;
+  return root;
 }
 
 // ---------- B 真真：常青小柏樹 ----------
@@ -336,7 +365,7 @@ function zhongzhong() {
 // ---------- D 瑞瑞：吉祥瑞雲 ----------
 function ruirui() {
   const g = new THREE.Group();
-  const W = '#fbfaf6', ROBE = '#f3eadb', LEG = '#fffaf2', SCARF = '#2a8f86', SW = '#7cc8dc', SHOE = '#6d5547';
+  const W = '#fbfaf6', HAND = '#fff0dc', ROBE = '#f3eadb', LEG = '#fffaf2', SCARF = '#2a8f86', SW = '#7cc8dc', SHOE = '#6d5547';
 
   limb(g, [-0.16, 0.25, 0], [-0.16, 0.56, 0], 0.15, LEG);
   part(S(0.17), SHOE, { parent: g, pos: [-0.17, 0.12, 0.06], scale: [1, 0.6, 1.3] });
@@ -346,10 +375,11 @@ function ruirui() {
   part(cyl(0.36, 0.5, 0.76), ROBE, { parent: g, pos: [0, 0.9, 0] });
   part(box(0.03, 0.6, 0.02), SW, { parent: g, pos: [0.05, 0.86, 0.45], rot: [-0.18, 0, 0], outline: false });
 
-  limb(g, [0.38, 1.15, 0], [0.72, 1.55, 0.1], 0.12, ROBE);
-  part(S(0.14), W, { parent: g, pos: [0.77, 1.67, 0.12] });
+  // 揮手：手放在頭部雲朵外側，避免和白色頭部融在一起
+  limb(g, [0.38, 1.15, 0], [1.02, 1.22, 0.14], 0.12, ROBE);
+  part(S(0.14), HAND, { parent: g, pos: [1.12, 1.32, 0.16] });
   limb(g, [-0.38, 1.15, 0], [-0.6, 0.8, 0.1], 0.12, ROBE);
-  part(S(0.13), W, { parent: g, pos: [-0.63, 0.72, 0.12] });
+  part(S(0.13), HAND, { parent: g, pos: [-0.63, 0.72, 0.12] });
 
   // 圍巾
   part(new THREE.TorusGeometry(0.36, 0.11, 14, 48), SCARF, { parent: g, pos: [0, 1.3, 0], rot: [Math.PI / 2, 0, 0] });
