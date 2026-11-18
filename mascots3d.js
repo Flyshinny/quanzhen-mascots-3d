@@ -209,12 +209,12 @@ function face(parent, surf, { eyes = 'open', spread = 0.34, eyeY = 0.1, mouthY =
       h2.position.set(-0.03 * size, -0.04 * size, 0.035);
       v.big.add(e, h1, h2);
     }
-    // >< 眼（大笑）：左眼「>」、右眼「<」
+    // 大笑眼「>  <」：畫面左邊的眼睛是「>」、右邊是「<」，尖端都朝向臉的中間
     v.squint = new THREE.Group();
     for (const k of [-1, 1]) {
       const st = new THREE.Mesh(cap(0.019 * size, 0.08 * size), inkMat);
       st.position.set(0, k * 0.028 * size, 0);
-      st.rotation.z = -s * k * 0.62 + Math.PI / 2;
+      st.rotation.z = s * k * 0.62 + Math.PI / 2; // 尖端朝向臉的中間
       v.squint.add(st);
     }
     // 愛心眼
