@@ -398,9 +398,47 @@ function quanquan() {
   const HC = 1.8;
   part(S(1), HOOD, { parent: g, pos: [0, HC, 0], scale: [0.76, 0.62, 0.6] });
   for (const s of [-1, 1]) part(S(0.17), HOOD, { parent: g, pos: [s * 0.74, HC - 0.06, -0.06] });
-  const fc = [0, HC - 0.02, 0.48], fr = [0.57, 0.45, 0.3];
-  part(S(1), FACE, { parent: g, pos: fc, scale: fr });
-  rig.face = face(g, ellipsoidSurf(fc, fr), { eyes: 'open', size: 0.88, spread: 0.4, eyeY: 0.06, mouthY: -0.3, blushOut: 0.2, blushY: -0.16 });
+  // 臉：貼著頭罩的弧度長出來（只比頭罩高 0.025），側面不會凸出；正面仍是橫向橢圓，外圈畫深色邊線
+  const HR = [0.76, 0.62, 0.6], FD = 0.025, FY = HC - 0.02, FW = 0.57, FH = 0.45;
+  const hoodZ = (x, y, d) => {
+    const q = 1 - (x / (HR[0] + d)) ** 2 - ((y - HC) / (HR[1] + d)) ** 2;
+    return (HR[2] + d) * Math.sqrt(Math.max(q, 0));
+  };
+  {
+    const NR = 18, NA = 72, pos = [], idx = [];
+    pos.push(0, FY, hoodZ(0, FY, FD));
+    for (let k = 1; k <= NR; k++) {
+      const s = k / NR;
+      for (let j = 0; j < NA; j++) {
+        const a = (j / NA) * Math.PI * 2, x = FW * s * Math.cos(a), y = FY + FH * s * Math.sin(a);
+        pos.push(x, y, hoodZ(x, y, FD));
+      }
+    }
+    const at = (k, j) => (k === 0 ? 0 : 1 + (k - 1) * NA + (j % NA));
+    for (let j = 0; j < NA; j++) idx.push(0, at(1, j), at(1, j + 1));
+    for (let k = 1; k < NR; k++) {
+      for (let j = 0; j < NA; j++) idx.push(at(k, j), at(k + 1, j), at(k + 1, j + 1), at(k, j), at(k + 1, j + 1), at(k, j + 1));
+    }
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    fg.setIndex(idx);
+    fg.computeVertexNormals();
+    part(fg, FACE, { parent: g, outline: false });
+    const rimPts = [];
+    for (let j = 0; j < NA; j++) {
+      const a = (j / NA) * Math.PI * 2, x = FW * Math.cos(a), y = FY + FH * Math.sin(a);
+      rimPts.push(V3(x, y, hoodZ(x, y, FD + 0.004)));
+    }
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rimPts, true), 144, 0.016, 8, true), flat('#4a2a1c')));
+  }
+  // 五官位置與原本相同（正面看一樣），深度改貼在新的臉面上
+  const faceSurf = (yaw, pitch, off = 0.008) => {
+    const d = FD + off;
+    const x = FW * Math.sin(yaw) * Math.cos(pitch), y = FY + FH * Math.sin(pitch), z = hoodZ(x, y, d);
+    const n = V3(x / (HR[0] + d) ** 2, (y - HC) / (HR[1] + d) ** 2, z / (HR[2] + d) ** 2).normalize();
+    return { p: V3(x, y, z), n };
+  };
+  rig.face = face(g, faceSurf, { eyes: 'open', size: 0.88, spread: 0.4, eyeY: 0.06, mouthY: -0.3, blushOut: 0.2, blushY: -0.16 });
 
   // 琉璃屋頂（整頂縮到 80%，底部貼在頭頂）
   const hat = new THREE.Group();
