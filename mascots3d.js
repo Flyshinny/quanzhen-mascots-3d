@@ -1,4 +1,6 @@
 // 五位吉祥物的 3D 模型（以基本幾何組成，卡通著色＋描邊）
+// 每位都有相同的關節（rig）：body（整體位移）、upper（上半身）、head（頭）、armL/armR（肩）、legL/legR（髖）
+// 以及表情控制 rig.face：set('happy')、talk(0~1)、blink(0~1)。動作與表情的清單見 poses.js。
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -75,6 +77,37 @@ function limb(parent, a, b, r, color) {
   return m;
 }
 
+// ---------- 關節 ----------
+// 樞紐：外層 group 放在關節位置（拿來旋轉），內層抵銷回原座標，裡面的零件照原本座標擺
+function pivot(parent, x, y, z = 0) {
+  const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p);
+  const inner = new THREE.Group(); inner.position.set(-x, -y, -z); p.add(inner);
+  return [p, inner];
+}
+// 手臂：樞紐在肩膀，靜止時朝正下方。a＝往外張開（0 垂下、π/2 水平、π 朝天；負值往身體內側），f＝往前抬
+export function poseArm(arm, side, a, f = 0) { arm.rotation.set(-f, 0, side * a); }
+// 腿：樞紐在髖部。out＝往外張，fwd＝往前踢（負值往後）
+export function poseLeg(leg, side, out, fwd = 0) { leg.rotation.set(-fwd, 0, side * out); }
+
+function makeArm(parent, s, [x, y, z = 0], { len, r, color, hand, handR, handScale, cuff }) {
+  const arm = new THREE.Group();
+  arm.position.set(s * x, y, z);
+  parent.add(arm);
+  limb(arm, [0, 0, 0], [0, -len, 0.05], r, color);
+  part(S(handR), hand, { parent: arm, pos: [0, -len - handR * 0.5, 0.07], scale: handScale });
+  // 袖口（可選）：讓手和顏色相近的身體、頭部分得開
+  if (cuff) part(new THREE.TorusGeometry(r * 0.95, 0.04, 10, 28), cuff, { parent: arm, pos: [0, -len + 0.02, 0.05], rot: [Math.PI / 2, 0, 0] });
+  return arm;
+}
+function makeLeg(parent, s, [x, y], { len, r, color, shoe, shoeR }) {
+  const leg = new THREE.Group();
+  leg.position.set(s * x, y, 0);
+  parent.add(leg);
+  limb(leg, [0, -len, 0], [0, 0, 0], r, color);
+  part(S(shoeR), shoe, { parent: leg, pos: [s * 0.015, -len - shoeR * 0.5, 0.07], scale: [1, 0.62, 1.3] });
+  return leg;
+}
+
 // 橢球表面上的點（yaw 左右、pitch 上下，弧度）
 function ellipsoidSurf(c, r) {
   return (yaw, pitch, off = 0.008) => {
@@ -108,38 +141,191 @@ function stick(obj, parent, s) {
   return obj;
 }
 
-// ---------- 臉 ----------
+// ---------- 臉與表情 ----------
 const INK = '#3b2419';
+// 各表情：眼睛（左右可不同）、嘴巴、眉毛、腮紅
+export const EXPRESSIONS = {
+  smile:     { label: '微笑', eyes: ['open', 'open'],       mouth: 'open' },
+  happy:     { label: '開心', eyes: ['happy', 'happy'],     mouth: 'open' },
+  laugh:     { label: '大笑', eyes: ['squint', 'squint'],   mouth: 'big', blush: 1.15 },
+  wink:      { label: '眨眼', eyes: ['open', 'happy'],      mouth: 'open', mouthScale: 0.85 },
+  surprised: { label: '驚訝', eyes: ['big', 'big'],         mouth: 'o', brows: 'up' },
+  shy:       { label: '害羞', eyes: ['happy', 'happy'],     mouth: 'smile', blush: 1.6 },
+  sad:       { label: '難過', eyes: ['open', 'open'],       mouth: 'frown', brows: 'sad', eyeScale: 0.85 },
+  angry:     { label: '生氣', eyes: ['open', 'open'],       mouth: 'frown', brows: 'angry', blush: 0.6, mouthScale: 0.8 },
+  sleepy:    { label: '想睡', eyes: ['line', 'line'],       mouth: 'o', mouthScale: 0.7 },
+  love:      { label: '愛心眼', eyes: ['heart', 'heart'],   mouth: 'open', blush: 1.2 },
+  think:     { label: '思考', eyes: ['open', 'open'],       mouth: 'side', brows: 'think' },
+  calm:      { label: '安詳', eyes: ['closed', 'closed'],   mouth: 'smile' },
+};
+
+const heartGeo = (() => {
+  const s = new THREE.Shape();
+  s.moveTo(0, -0.09);
+  s.bezierCurveTo(-0.02, -0.06, -0.1, -0.01, -0.1, 0.035);
+  s.bezierCurveTo(-0.1, 0.075, -0.06, 0.095, -0.035, 0.09);
+  s.bezierCurveTo(-0.015, 0.087, 0, 0.07, 0, 0.055);
+  s.bezierCurveTo(0, 0.07, 0.015, 0.087, 0.035, 0.09);
+  s.bezierCurveTo(0.06, 0.095, 0.1, 0.075, 0.1, 0.035);
+  s.bezierCurveTo(0.1, -0.01, 0.02, -0.06, 0, -0.09);
+  return new THREE.ShapeGeometry(s, 16);
+})();
+
 function face(parent, surf, { eyes = 'open', spread = 0.34, eyeY = 0.1, mouthY = -0.18, size = 1, blushOut = 0.17, blushY = -0.12 } = {}) {
+  const inkMat = flat(INK);
+  const eyeSides = [];
+  const blushes = [];
   for (const s of [-1, 1]) {
     const g = new THREE.Group();
-    if (eyes === 'open') {
-      const e = new THREE.Mesh(S(0.075 * size), flat(INK));
+    const v = {};
+    // 圓眼＋亮點
+    v.open = new THREE.Group();
+    {
+      const e = new THREE.Mesh(S(0.075 * size), inkMat);
       e.scale.set(1, 1.22, 0.35);
       const hl = new THREE.Mesh(S(0.026 * size), flat('#ffffff'));
       hl.position.set(0.024 * size, 0.04 * size, 0.03);
-      g.add(e, hl);
-    } else {
-      const arc = new THREE.Mesh(new THREE.TorusGeometry(0.085 * size, 0.021 * size, 8, 28, Math.PI), flat(INK));
-      arc.position.y = -0.03 * size;
-      g.add(arc);
+      v.open.add(e, hl);
     }
+    // 瞇眼笑 ∩
+    v.happy = new THREE.Mesh(new THREE.TorusGeometry(0.085 * size, 0.021 * size, 8, 28, Math.PI), inkMat);
+    v.happy.position.y = -0.03 * size;
+    // 閉眼 ∪（安詳）
+    v.closed = new THREE.Mesh(new THREE.TorusGeometry(0.075 * size, 0.019 * size, 8, 28, Math.PI), inkMat);
+    v.closed.rotation.z = Math.PI;
+    v.closed.position.y = 0.035 * size;
+    // 一字眼（想睡）
+    v.line = new THREE.Mesh(cap(0.017 * size, 0.12 * size), inkMat);
+    v.line.rotation.z = Math.PI / 2;
+    v.line.position.y = -0.015 * size;
+    // 大眼（驚訝）
+    v.big = new THREE.Group();
+    {
+      const e = new THREE.Mesh(S(0.095 * size), inkMat);
+      e.scale.set(1, 1.18, 0.35);
+      const h1 = new THREE.Mesh(S(0.032 * size), flat('#ffffff'));
+      h1.position.set(0.03 * size, 0.05 * size, 0.035);
+      const h2 = new THREE.Mesh(S(0.015 * size), flat('#ffffff'));
+      h2.position.set(-0.03 * size, -0.04 * size, 0.035);
+      v.big.add(e, h1, h2);
+    }
+    // >< 眼（大笑）：左眼「>」、右眼「<」
+    v.squint = new THREE.Group();
+    for (const k of [-1, 1]) {
+      const st = new THREE.Mesh(cap(0.019 * size, 0.08 * size), inkMat);
+      st.position.set(0, k * 0.028 * size, 0);
+      st.rotation.z = -s * k * 0.62 + Math.PI / 2;
+      v.squint.add(st);
+    }
+    // 愛心眼
+    v.heart = new THREE.Mesh(heartGeo, flat('#e8475f'));
+    v.heart.scale.setScalar(1.05 * size);
+    for (const k in v) { v[k].visible = k === eyes; g.add(v[k]); }
+    // 眉毛（預設隱藏）
+    const brow = new THREE.Mesh(cap(0.016 * size, 0.08 * size), inkMat);
+    brow.rotation.z = Math.PI / 2;
+    brow.position.set(0, 0.17 * size, 0.004);
+    brow.visible = false;
+    g.add(brow);
     stick(g, parent, surf(s * spread, eyeY));
+    eyeSides.push({ s, g, v, brow });
 
     const b = new THREE.Mesh(new THREE.CircleGeometry(0.075 * size, 28), flat('#f39c9c', { transparent: true, opacity: 0.8 }));
     b.scale.set(1.35, 1, 1);
     stick(b, parent, surf(s * (spread + blushOut), eyeY + blushY, 0.006));
+    blushes.push(b);
   }
+
+  // 嘴巴：第一個建立的「open」維持原本結構（talk.js 以顏色 #9a3328 找到它）
   const m = new THREE.Group();
-  const rim = new THREE.Mesh(new THREE.CircleGeometry(0.12 * size, 32, Math.PI, Math.PI), flat(INK));
-  rim.position.y = 0.016 * size;
-  const mouth = new THREE.Mesh(new THREE.CircleGeometry(0.1 * size, 32, Math.PI, Math.PI), flat('#9a3328'));
-  mouth.position.z = 0.002;
-  const tongue = new THREE.Mesh(new THREE.CircleGeometry(0.055 * size, 24, Math.PI, Math.PI), flat('#f2807a'));
-  tongue.position.set(0, -0.038 * size, 0.004);
-  tongue.scale.set(1.15, 0.75, 1);
-  m.add(rim, mouth, tongue);
+  const mouths = {};
+  mouths.open = new THREE.Group();
+  {
+    const rim = new THREE.Mesh(new THREE.CircleGeometry(0.12 * size, 32, Math.PI, Math.PI), inkMat);
+    rim.position.y = 0.016 * size;
+    const mouth = new THREE.Mesh(new THREE.CircleGeometry(0.1 * size, 32, Math.PI, Math.PI), flat('#9a3328'));
+    mouth.position.z = 0.002;
+    const tongue = new THREE.Mesh(new THREE.CircleGeometry(0.055 * size, 24, Math.PI, Math.PI), flat('#f2807a'));
+    tongue.position.set(0, -0.038 * size, 0.004);
+    tongue.scale.set(1.15, 0.75, 1);
+    mouths.open.add(rim, mouth, tongue);
+  }
+  // 大笑：同樣的 D 形嘴放大
+  mouths.big = mouths.open.clone();
+  mouths.big.scale.set(1.3, 1.45, 1);
+  // 微笑 ∪
+  mouths.smile = new THREE.Mesh(new THREE.TorusGeometry(0.07 * size, 0.016 * size, 8, 28, Math.PI), inkMat);
+  mouths.smile.rotation.z = Math.PI;
+  mouths.smile.position.y = 0.035 * size;
+  // 嘟嘴 O
+  mouths.o = new THREE.Group();
+  {
+    const ring = new THREE.Mesh(new THREE.CircleGeometry(0.06 * size, 28), inkMat);
+    ring.scale.set(0.85, 1.05, 1);
+    const inner = new THREE.Mesh(new THREE.CircleGeometry(0.044 * size, 28), flat('#a8392d'));
+    inner.scale.set(0.85, 1.05, 1);
+    inner.position.z = 0.002;
+    mouths.o.add(ring, inner);
+    mouths.o.position.y = -0.01 * size;
+  }
+  // 難過 ∩
+  mouths.frown = new THREE.Mesh(new THREE.TorusGeometry(0.06 * size, 0.016 * size, 8, 28, Math.PI), inkMat);
+  mouths.frown.position.y = -0.04 * size;
+  // 歪嘴（思考）
+  mouths.side = new THREE.Mesh(cap(0.015 * size, 0.07 * size), inkMat);
+  mouths.side.rotation.z = Math.PI / 2 + 0.25;
+  mouths.side.position.set(0.03 * size, -0.01 * size, 0);
+  for (const k in mouths) { mouths[k].visible = k === 'open'; m.add(mouths[k]); }
   stick(m, parent, surf(0, mouthY, 0.01));
+
+  // ---------- 控制器 ----------
+  const ctl = {
+    name: eyes === 'open' ? 'smile' : 'happy',
+    _eyeScale: 1, _mouthScale: 1, _blink: 0, _talk: 0, _mouth: 'open',
+    set(name) {
+      const e = EXPRESSIONS[name];
+      if (!e) return;
+      this.name = name;
+      eyeSides.forEach(({ v, brow, s }, i) => {
+        const kind = e.eyes[i];
+        for (const k in v) v[k].visible = k === kind;
+        brow.visible = !!e.brows;
+        brow.position.y = 0.17 * size;
+        if (e.brows === 'up') { brow.rotation.z = Math.PI / 2; brow.position.y = 0.21 * size; }
+        if (e.brows === 'sad') brow.rotation.z = Math.PI / 2 - s * 0.38;
+        if (e.brows === 'angry') brow.rotation.z = Math.PI / 2 + s * 0.42;
+        if (e.brows === 'think') { brow.rotation.z = Math.PI / 2 + (s > 0 ? -0.3 : 0.1); brow.position.y = (s > 0 ? 0.2 : 0.17) * size; }
+      });
+      this._eyeScale = e.eyeScale || 1;
+      this._mouth = e.mouth;
+      this._mouthScale = e.mouthScale || 1;
+      for (const k in mouths) mouths[k].visible = k === e.mouth;
+      const bl = e.blush ?? 1;
+      blushes.forEach((b) => { b.scale.set(1.35 * Math.sqrt(bl), Math.sqrt(bl), 1); b.material.opacity = Math.min(1, 0.8 * (0.6 + 0.4 * bl)); });
+      this._apply();
+    },
+    // 說話時的嘴型開合（0～1），用在 open / big 嘴
+    talk(v) { this._talk = v; this._apply(); },
+    // 眨眼（0 張開～1 閉上）
+    blink(v) { this._blink = v; this._apply(); },
+    _apply() {
+      const sy = this._eyeScale * (1 - 0.9 * this._blink);
+      eyeSides.forEach(({ g }) => g.scale.set(this._eyeScale, Math.max(0.08, sy), 1));
+      const ms = this._mouthScale;
+      for (const k of ['open', 'big']) {
+        const base = k === 'big' ? [1.3, 1.45] : [1, 1];
+        mouths[k].scale.set(base[0] * ms * (1 - this._talk * 0.12), base[1] * ms * (this._talk ? 0.45 + this._talk * 0.95 : 1), 1);
+      }
+      for (const k of ['o', 'smile', 'frown', 'side']) mouths[k].scale.setScalar(ms * (k === 'o' ? 1 + this._talk * 0.5 : 1));
+    },
+  };
+  return ctl;
+}
+
+function finish(root, rig, rest) {
+  rig.rest = rest;
+  root.userData.rig = rig;
+  return root;
 }
 
 // ---------- A 全全：道院小屋 ----------
@@ -148,12 +334,6 @@ function quanquan() {
   const RED = '#cf532e', HOOD = '#bd4a2b', ROOF = '#e27b3d', GOLD = '#f3b634', FACE = '#fde8d2',
     WHITE = '#fbf4e8', TEAL = '#2b9186', SHOE = '#7b4a2f';
 
-  // 關節（可動）：腿、上半身、手、頭各自一個樞紐，預設姿勢與原本相同
-  const pivot = (parent, x, y, z = 0) => {
-    const p = new THREE.Group(); p.position.set(x, y, z); parent.add(p);
-    const inner = new THREE.Group(); inner.position.set(-x, -y, -z); p.add(inner);
-    return [p, inner];
-  };
   const rig = {};
   // 短短圓圓的腿（樞紐在髖部）
   for (const s of [-1, 1]) {
@@ -200,7 +380,7 @@ function quanquan() {
     c.position.set(s * 0.09, 1.14, bodyR(1.14) - 0.01);
     c.rotation.set(-0.3, 0, s * 0.5);
   }
-  // 手：樞紐在肩膀，手臂在樞紐裡朝正下方；預設一手揮手、一手自然垂下
+  // 手：樞紐在肩膀，手臂在樞紐裡朝正下方
   for (const s of [-1, 1]) {
     const arm = new THREE.Group();
     arm.position.set(s * 0.44, 1.15, 0);
@@ -209,23 +389,18 @@ function quanquan() {
     part(S(0.145), FACE, { parent: arm, pos: [0, -0.6, 0.1] });
     rig[s < 0 ? 'armL' : 'armR'] = arm;
   }
-  rig.armL.rotation.z = -2.4;   // 揮手
-  rig.armR.rotation.z = 0.65;   // 垂下
 
   // 頭（樞紐在脖子）
   const [head, hi] = pivot(g, 0, 1.4);
   rig.head = head;
   {
   const g = hi;
-  // 頭罩：跟臉一樣是橫向橢圓，四周一圈均勻紅邊
   const HC = 1.8;
   part(S(1), HOOD, { parent: g, pos: [0, HC, 0], scale: [0.76, 0.62, 0.6] });
-  // 兩個圓圓的耳朵（頭罩同色，藏在兩側後面）
   for (const s of [-1, 1]) part(S(0.17), HOOD, { parent: g, pos: [s * 0.74, HC - 0.06, -0.06] });
-  // 臉：橫向橢圓，整個露在頭罩前方
   const fc = [0, HC - 0.02, 0.48], fr = [0.57, 0.45, 0.3];
   part(S(1), FACE, { parent: g, pos: fc, scale: fr });
-  face(g, ellipsoidSurf(fc, fr), { eyes: 'open', size: 0.88, spread: 0.4, eyeY: 0.06, mouthY: -0.3, blushOut: 0.2, blushY: -0.16 });
+  rig.face = face(g, ellipsoidSurf(fc, fr), { eyes: 'open', size: 0.88, spread: 0.4, eyeY: 0.06, mouthY: -0.3, blushOut: 0.2, blushY: -0.16 });
 
   // 琉璃屋頂（整頂縮到 80%，底部貼在頭頂）
   const hat = new THREE.Group();
@@ -239,8 +414,7 @@ function quanquan() {
     const a = (k / 20) * Math.PI * 2;
     const pts = [[1.12, 0.06], [0.85, 0.185], [0.55, 0.345], [0.41, 0.47]]
       .map(([r, y]) => V3(Math.sin(a) * r * 1.012, 2.38 + y + 0.004, Math.cos(a) * r * 1.012));
-    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.011, 6), ridgeMat);
-    hat.add(tube);
+    hat.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.011, 6), ridgeMat));
   }
   part(new THREE.TorusGeometry(1.13, 0.045, 10, 72), '#c85f2c', { parent: hat, pos: [0, 2.41, 0], rot: [Math.PI / 2, 0, 0] });
   part(cyl(0.42, 0.44, 0.1), '#d06a33', { parent: hat, pos: [0, 2.89, 0] });
@@ -260,39 +434,36 @@ function quanquan() {
   }
   g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(slit), 20, 0.013, 6), flat(INK)));
   } // 上半身
-  root.userData.rig = rig;
-  return root;
+  // 招牌姿勢：左手揮手、右手垂下（與原本 armL.z = -2.4、armR.z = 0.65 相同）
+  return finish(root, rig, { armL: [2.4, 0], armR: [0.65, 0], legL: [0, 0], legR: [0, 0], expr: 'smile' });
 }
 
 // ---------- B 真真：常青小柏樹 ----------
 function zhenzhen() {
-  const g = new THREE.Group();
+  const root = new THREE.Group();
   const G = '#3f9b5d', GD = '#2b7446', GL = '#93d27c', HAND = '#5fb36f', FACE = '#fde8d2', STAR = '#f7c53d';
+  const rig = {};
+  for (const s of [-1, 1]) rig[s < 0 ? 'legL' : 'legR'] = makeLeg(root, s, [0.22, 0.42], { len: 0.22, r: 0.15, color: G, shoe: GD, shoeR: 0.2 });
 
-  for (const s of [-1, 1]) {
-    limb(g, [s * 0.22, 0.2, 0], [s * 0.22, 0.42, 0], 0.15, G);
-    part(S(0.2), GD, { parent: g, pos: [s * 0.24, 0.12, 0.06], scale: [1, 0.65, 1.3] });
-  }
+  const [upper, g] = pivot(root, 0, 0.42);
+  rig.upper = upper;
   part(cyl(0.45, 0.74, 0.8), G, { parent: g, pos: [0, 0.78, 0] });
   part(S(1), GL, { parent: g, pos: [0, 0.72, 0.62], scale: [0.14, 0.2, 0.04], rot: [-0.35, 0, 0] });
-  // 雙手歡呼
-  for (const s of [-1, 1]) {
-    limb(g, [s * 0.45, 1.08, 0], [s * 0.84, 1.52, 0.1], 0.12, G);
-    part(S(0.15), HAND, { parent: g, pos: [s * 0.9, 1.62, 0.12] });
-  }
+  for (const s of [-1, 1]) rig[s < 0 ? 'armL' : 'armR'] = makeArm(g, s, [0.45, 1.08], { len: 0.58, r: 0.12, color: G, hand: HAND, handR: 0.15 });
 
-  // 水滴形樹冠頭罩
+  // 水滴形樹冠頭罩（頭的樞紐在頭罩底部）
+  const [head, h] = pivot(g, 0, 1.12);
+  rig.head = head;
   const H = 2.0, BASE = 0.95, RMAX = 0.8;
   const hoodR = (t) => RMAX * Math.pow(Math.sin(Math.PI * Math.pow(Math.min(Math.max(t, 0), 1), 0.62)), 0.85);
   const pts = [];
   for (let i = 0; i <= 40; i++) pts.push([hoodR(i / 40), (i / 40) * H]);
-  part(lathe(pts), G, { parent: g, pos: [0, BASE, 0] });
+  part(lathe(pts), G, { parent: h, pos: [0, BASE, 0] });
 
   const fc = [0, 1.62, 0.52], fr = [0.46, 0.4, 0.36];
-  part(S(1), FACE, { parent: g, pos: fc, scale: fr });
-  face(g, ellipsoidSurf(fc, fr), { eyes: 'happy', spread: 0.36, eyeY: 0.12, mouthY: -0.24, blushY: -0.16 });
+  part(S(1), FACE, { parent: h, pos: fc, scale: fr });
+  rig.face = face(h, ellipsoidSurf(fc, fr), { eyes: 'happy', spread: 0.36, eyeY: 0.12, mouthY: -0.24, blushY: -0.16 });
 
-  // 樹冠波紋
   const waveMat = flat(GD);
   for (const y of [2.05, 2.3, 2.55]) {
     const r = hoodR((y - BASE) / H) + 0.012;
@@ -302,9 +473,8 @@ function zhenzhen() {
       const a = -span + (i / 60) * span * 2;
       wpts.push(V3(Math.sin(a) * r, y + 0.03 * Math.sin(a * 14), Math.cos(a) * r));
     }
-    g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wpts), 120, 0.016, 6), waveMat));
+    h.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wpts), 120, 0.016, 6), waveMat));
   }
-  // 星星
   const star = new THREE.Shape();
   for (let i = 0; i < 10; i++) {
     const r = i % 2 ? 0.08 : 0.18, a = (i / 10) * Math.PI * 2 + Math.PI / 2;
@@ -313,89 +483,86 @@ function zhenzhen() {
   const sg = new THREE.ExtrudeGeometry(star, { depth: 0.06, bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.02, bevelSegments: 2 });
   sg.center();
   const a = 0.78, sy = 2.15, sr = hoodR((sy - BASE) / H) + 0.04;
-  part(sg, STAR, { parent: g, pos: [Math.sin(a) * sr, sy, Math.cos(a) * sr], rot: [0, a, 0.2] });
-  return g;
+  part(sg, STAR, { parent: h, pos: [Math.sin(a) * sr, sy, Math.cos(a) * sr], rot: [0, a, 0.2] });
+  // 招牌姿勢：雙手歡呼
+  return finish(root, rig, { armL: [2.43, 0.2], armR: [2.43, 0.2], legL: [0, 0], legR: [0, 0], expr: 'happy' });
 }
 
 // ---------- C 忠忠：暖暖心燈 ----------
 function zhongzhong() {
-  const g = new THREE.Group();
+  const root = new THREE.Group();
   const Yc = '#f2b33c', YD = '#de9a2e', YL = '#f8d57a';
+  const rig = {};
+  for (const s of [-1, 1]) rig[s < 0 ? 'legL' : 'legR'] = makeLeg(root, s, [0.18, 0.46], { len: 0.26, r: 0.14, color: Yc, shoe: YD, shoeR: 0.18 });
 
-  for (const s of [-1, 1]) {
-    limb(g, [s * 0.18, 0.2, 0], [s * 0.18, 0.46, 0], 0.14, Yc);
-    part(S(0.18), YD, { parent: g, pos: [s * 0.2, 0.11, 0.06], scale: [1, 0.6, 1.3] });
-  }
+  const [upper, g] = pivot(root, 0, 0.46);
+  rig.upper = upper;
   part(cyl(0.36, 0.48, 0.72), Yc, { parent: g, pos: [0, 0.82, 0] });
-  // 合十
-  for (const s of [-1, 1]) limb(g, [s * 0.36, 1.08, 0], [s * 0.1, 0.98, 0.4], 0.1, Yc);
-  for (const s of [-1, 1]) part(S(0.12), Yc, { parent: g, pos: [s * 0.055, 1.06, 0.46], scale: [0.75, 1.25, 0.8] });
+  for (const s of [-1, 1]) rig[s < 0 ? 'armL' : 'armR'] = makeArm(g, s, [0.36, 1.08], { len: 0.42, r: 0.1, color: Yc, hand: Yc, handR: 0.12, handScale: [0.75, 1.25, 0.8] });
 
-  // 燈碗頭
+  // 燈碗頭（樞紐在碗底）
+  const [head, h] = pivot(g, 0, 1.2);
+  rig.head = head;
   const bowl = [[0, 0], [0.3, 0], [0.32, 0.06], [0.5, 0.18], [0.68, 0.38], [0.8, 0.62], [0.86, 0.85], [0.88, 0.92], [0, 0.92]];
   const BASE = 1.2;
-  part(lathe(bowl), Yc, { parent: g, pos: [0, BASE, 0] });
-  part(new THREE.TorusGeometry(0.31, 0.045, 10, 48), YD, { parent: g, pos: [0, BASE + 0.02, 0], rot: [Math.PI / 2, 0, 0] });
-  part(new THREE.TorusGeometry(0.87, 0.055, 12, 72), YL, { parent: g, pos: [0, BASE + 0.92, 0], rot: [Math.PI / 2, 0, 0] });
+  part(lathe(bowl), Yc, { parent: h, pos: [0, BASE, 0] });
+  part(new THREE.TorusGeometry(0.31, 0.045, 10, 48), YD, { parent: h, pos: [0, BASE + 0.02, 0], rot: [Math.PI / 2, 0, 0] });
+  part(new THREE.TorusGeometry(0.87, 0.055, 12, 72), YL, { parent: h, pos: [0, BASE + 0.92, 0], rot: [Math.PI / 2, 0, 0] });
   const oil = new THREE.Mesh(new THREE.CircleGeometry(0.85, 56), toon('#e2902c'));
   oil.rotation.x = -Math.PI / 2;
   oil.position.y = BASE + 0.925;
-  g.add(oil);
-  face(g, latheSurf(bowl, BASE, 1.72), { eyes: 'open', spread: 0.34, eyeY: 0.1, mouthY: -0.14, blushOut: 0.2, blushY: -0.1 });
+  h.add(oil);
+  rig.face = face(h, latheSurf(bowl, BASE, 1.72), { eyes: 'open', spread: 0.34, eyeY: 0.1, mouthY: -0.14, blushOut: 0.2, blushY: -0.1 });
 
-  // 火焰
-  const flame = (r, h) => {
+  const flame = (r, hh) => {
     const p = [];
     for (let i = 0; i <= 32; i++) {
       const t = i / 32;
-      p.push([r * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.5)), 0.9), t * h]);
+      p.push([r * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.5)), 0.9), t * hh]);
     }
     return lathe(p, 40);
   };
   const glow = (c, e) => toon(c, { emissive: e, emissiveIntensity: 0.45 });
-  part(flame(0.42, 1.0), null, { parent: g, pos: [0, BASE + 0.82, 0], mat: glow('#f07a2a', '#ff6a10') });
-  part(flame(0.26, 0.66), null, { parent: g, pos: [0, BASE + 0.86, 0.28], scale: [1, 1, 0.45], mat: glow('#ffc94a', '#ffb020'), outline: false });
-  part(flame(0.13, 0.34), null, { parent: g, pos: [0, BASE + 0.9, 0.37], scale: [1, 1, 0.4], mat: glow('#fff1b0', '#fff0a0'), outline: false });
+  const [flP, fl] = pivot(h, 0, BASE + 0.82); // 火焰的樞紐在燈芯，搖曳時以底部為中心
+  part(flame(0.42, 1.0), null, { parent: fl, pos: [0, BASE + 0.82, 0], mat: glow('#f07a2a', '#ff6a10') });
+  part(flame(0.26, 0.66), null, { parent: fl, pos: [0, BASE + 0.86, 0.28], scale: [1, 1, 0.45], mat: glow('#ffc94a', '#ffb020'), outline: false });
+  part(flame(0.13, 0.34), null, { parent: fl, pos: [0, BASE + 0.9, 0.37], scale: [1, 1, 0.4], mat: glow('#fff1b0', '#fff0a0'), outline: false });
+  rig.flame = flP;
   const light = new THREE.PointLight('#ffb35a', 2.2, 4, 1.6);
   light.position.set(0, BASE + 1.3, 0.4);
-  g.add(light);
-  return g;
+  h.add(light);
+  // 招牌姿勢：合十
+  return finish(root, rig, { armL: [-0.58, 1.5], armR: [-0.58, 1.5], legL: [0, 0], legR: [0, 0], expr: 'smile' });
 }
 
 // ---------- D 瑞瑞：吉祥瑞雲 ----------
 function ruirui() {
-  const g = new THREE.Group();
-  const W = '#fbfaf6', HAND = '#fff0dc', ROBE = '#f3eadb', LEG = '#fffaf2', SCARF = '#2a8f86', SW = '#7cc8dc', SHOE = '#6d5547';
+  const root = new THREE.Group();
+  const W = '#fbfaf6', HAND = '#f7d4b4', ROBE = '#f3eadb', LEG = '#fffaf2', SCARF = '#2a8f86', SW = '#7cc8dc', SHOE = '#6d5547';
+  const rig = {};
+  for (const s of [-1, 1]) rig[s < 0 ? 'legL' : 'legR'] = makeLeg(root, s, [0.16, 0.56], { len: 0.34, r: 0.15, color: LEG, shoe: SHOE, shoeR: 0.17 });
 
-  limb(g, [-0.16, 0.25, 0], [-0.16, 0.56, 0], 0.15, LEG);
-  part(S(0.17), SHOE, { parent: g, pos: [-0.17, 0.12, 0.06], scale: [1, 0.6, 1.3] });
-  limb(g, [0.16, 0.56, 0], [0.3, 0.36, -0.3], 0.15, LEG);
-  part(S(0.17), SHOE, { parent: g, pos: [0.34, 0.3, -0.43], scale: [1, 0.6, 1.3], rot: [0.6, 0, 0] });
-
+  const [upper, g] = pivot(root, 0, 0.56);
+  rig.upper = upper;
   part(cyl(0.36, 0.5, 0.76), ROBE, { parent: g, pos: [0, 0.9, 0] });
   part(box(0.03, 0.6, 0.02), SW, { parent: g, pos: [0.05, 0.86, 0.45], rot: [-0.18, 0, 0], outline: false });
-
-  // 揮手：手放在頭部雲朵外側，避免和白色頭部融在一起
-  limb(g, [0.38, 1.15, 0], [1.02, 1.22, 0.14], 0.12, ROBE);
-  part(S(0.14), HAND, { parent: g, pos: [1.12, 1.32, 0.16] });
-  limb(g, [-0.38, 1.15, 0], [-0.6, 0.8, 0.1], 0.12, ROBE);
-  part(S(0.13), HAND, { parent: g, pos: [-0.63, 0.72, 0.12] });
-
+  for (const s of [-1, 1]) rig[s < 0 ? 'armL' : 'armR'] = makeArm(g, s, [0.38, 1.15], { len: 0.58, r: 0.12, color: ROBE, hand: HAND, handR: 0.14, cuff: SCARF });
   // 圍巾
   part(new THREE.TorusGeometry(0.36, 0.11, 14, 48), SCARF, { parent: g, pos: [0, 1.3, 0], rot: [Math.PI / 2, 0, 0] });
   part(box(0.2, 0.62, 0.07), SCARF, { parent: g, pos: [0.2, 0.98, 0.46], rot: [-0.2, 0, 0.18] });
 
-  // 雲朵頭
+  // 雲朵頭（樞紐在脖子）
+  const [head, h] = pivot(g, 0, 1.38);
+  rig.head = head;
   const fc = [0, 2.0, 0], fr = [0.8, 0.66, 0.6];
-  part(S(1), W, { parent: g, pos: fc, scale: fr });
+  part(S(1), W, { parent: h, pos: fc, scale: fr });
   for (const [x, y, z, r] of [
     [-0.72, 1.82, -0.05, 0.42], [0.72, 1.82, -0.05, 0.42], [-0.62, 2.35, -0.08, 0.42],
     [-0.1, 2.6, -0.1, 0.48], [0.5, 2.48, -0.1, 0.44], [0.88, 2.15, -0.12, 0.33],
     [-0.9, 2.12, -0.12, 0.33], [-0.36, 1.52, 0, 0.32], [0.36, 1.52, 0, 0.32],
-  ]) part(S(r), W, { parent: g, pos: [x, y, z] });
+  ]) part(S(r), W, { parent: h, pos: [x, y, z] });
   const surf = ellipsoidSurf(fc, fr);
-  face(g, surf, { eyes: 'happy', spread: 0.34, eyeY: 0.1, mouthY: -0.2, blushOut: 0.16, blushY: -0.14 });
-  // 祥雲漩渦
+  rig.face = face(h, surf, { eyes: 'happy', spread: 0.34, eyeY: 0.1, mouthY: -0.2, blushOut: 0.16, blushY: -0.14 });
   const swirl = [];
   for (let i = 0; i <= 50; i++) {
     const t = i / 50, a = t * Math.PI * 3.2, rr = 0.02 + 0.085 * t;
@@ -406,21 +573,21 @@ function ruirui() {
   for (const s of [-1, 1]) {
     const m = new THREE.Mesh(sGeo, flat(SW));
     m.scale.x = -s;
-    stick(m, g, surf(s * 0.74, -0.02, 0.02));
+    stick(m, h, surf(s * 0.74, -0.02, 0.02));
   }
-  return g;
+  // 招牌姿勢：右手在頭旁揮手、左手垂下、右腳往後踢
+  return finish(root, rig, { armL: [0.5, 0.27], armR: [1.89, 0.75], legL: [0, 0], legR: [0.37, -0.98], expr: 'happy' });
 }
 
 // ---------- E 恕恕：如心小蓮花 ----------
 function shushu() {
-  const g = new THREE.Group();
+  const root = new THREE.Group();
   const F = '#fde8d2', P = '#f39cb3', PD = '#e57794', GOLD = '#f3b634', SK = '#55b36f', SKD = '#3f9259', FOOT = '#f4a7ab';
+  const rig = {};
+  for (const s of [-1, 1]) rig[s < 0 ? 'legL' : 'legR'] = makeLeg(root, s, [0.13, 0.5], { len: 0.3, r: 0.12, color: F, shoe: FOOT, shoeR: 0.15 });
 
-  limb(g, [-0.13, 0.2, 0], [-0.13, 0.5, 0], 0.12, F);
-  part(S(0.15), FOOT, { parent: g, pos: [-0.14, 0.1, 0.05], scale: [1, 0.6, 1.3] });
-  limb(g, [0.13, 0.5, 0], [0.24, 0.34, -0.26], 0.12, F);
-  part(S(0.15), FOOT, { parent: g, pos: [0.27, 0.28, -0.36], scale: [1, 0.6, 1.3], rot: [0.6, 0, 0] });
-
+  const [upper, g] = pivot(root, 0, 0.5);
+  rig.upper = upper;
   // 荷葉裙（波浪裙襬）
   const skirt = lathe([[0, 0.5], [0.72, 0.5], [0.72, 0.6], [0.5, 0.82], [0.32, 1.02], [0, 1.02]], 96);
   const pos = skirt.attributes.position;
@@ -440,30 +607,50 @@ function shushu() {
     g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(vp), 12, 0.012, 5), veinMat));
   }
   part(cyl(0.27, 0.32, 0.28), SK, { parent: g, pos: [0, 1.12, 0] });
-  for (const s of [-1, 1]) limb(g, [s * 0.28, 1.15, 0], [s * 0.1, 1.1, 0.3], 0.08, F);
-  for (const s of [-1, 1]) part(S(0.1), F, { parent: g, pos: [s * 0.05, 1.17, 0.34], scale: [0.8, 1.2, 0.8] });
+  for (const s of [-1, 1]) rig[s < 0 ? 'armL' : 'armR'] = makeArm(g, s, [0.28, 1.15], { len: 0.3, r: 0.08, color: F, hand: F, handR: 0.1, handScale: [0.8, 1.2, 0.8] });
 
-  // 頭＋蓮花瓣
+  // 頭＋蓮花瓣（樞紐在脖子）
+  const [head, h] = pivot(g, 0, 1.28);
+  rig.head = head;
   const fc = [0, 1.85, 0], fr = [0.62, 0.58, 0.56];
   for (const [layer, color, d, z, sc] of [[0, PD, 0.8, -0.28, [0.25, 0.44, 0.1]], [1, P, 0.72, -0.14, [0.23, 0.4, 0.1]]]) {
     for (let k = 0; k < 12; k++) {
       const th = Math.PI / 2 + (k + layer * 0.5) * (Math.PI * 2 / 12);
       if (Math.sin(th) < -0.55) continue;
-      part(S(1), color, {
-        parent: g, pos: [Math.cos(th) * d, fc[1] + Math.sin(th) * d, z],
-        scale: sc, rot: [0, 0, th - Math.PI / 2],
-      });
+      part(S(1), color, { parent: h, pos: [Math.cos(th) * d, fc[1] + Math.sin(th) * d, z], scale: sc, rot: [0, 0, th - Math.PI / 2] });
     }
   }
-  part(S(1), F, { parent: g, pos: fc, scale: fr });
-  part(S(0.1), GOLD, { parent: g, pos: [0, 2.46, 0.06] });
-  face(g, ellipsoidSurf(fc, fr), { eyes: 'happy', spread: 0.36, eyeY: 0.06, mouthY: -0.24, blushY: -0.16 });
-  return g;
+  part(S(1), F, { parent: h, pos: fc, scale: fr });
+  part(S(0.1), GOLD, { parent: h, pos: [0, 2.46, 0.06] });
+  rig.face = face(h, ellipsoidSurf(fc, fr), { eyes: 'happy', spread: 0.36, eyeY: 0.06, mouthY: -0.24, blushY: -0.16 });
+  // 招牌姿勢：雙手在胸前合攏、右腳往後踢
+  return finish(root, rig, { armL: [-0.6, 1.63], armR: [-0.6, 1.63], legL: [0, 0], legR: [0.35, -1.02], expr: 'happy' });
 }
 
 export const BUILDERS = { quanquan, zhenzhen, zhongzhong, ruirui, shushu };
+
+// 套用某位角色的招牌姿勢（建立時預設就是這個姿勢）
+export function resetPose(rig) {
+  const r = rig.rest;
+  poseArm(rig.armL, -1, ...r.armL); poseArm(rig.armR, 1, ...r.armR);
+  poseLeg(rig.legL, -1, ...r.legL); poseLeg(rig.legR, 1, ...r.legR);
+  rig.upper.rotation.set(0, 0, 0);
+  rig.head.rotation.set(0, 0, 0);
+  rig.body.position.set(0, 0, 0);
+  rig.body.rotation.set(0, 0, 0);
+  rig.body.scale.set(1, 1, 1);
+  rig.face.set(r.expr);
+}
+
 export function buildMascot3D(id) {
-  const g = BUILDERS[id]();
-  g.name = id;
-  return g;
+  const inner = BUILDERS[id]();
+  const outer = new THREE.Group();
+  outer.name = id;
+  outer.add(inner);
+  const rig = inner.userData.rig;
+  rig.body = inner;
+  rig.id = id;
+  outer.userData.rig = rig;
+  resetPose(rig);
+  return outer;
 }
